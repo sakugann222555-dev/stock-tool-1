@@ -142,8 +142,8 @@
           // 勝率っぽく変換（簡易）
           const winRate = Math.min(50 + score * 0.4, 85);
 
-          // 65%未満は表示しない
-          if (winRate < 65) continue;
+         // 55%未満除外（動作確認用）
+if (winRate < 55) continue;
 
           const analysisLines = [
             "過熱感が少なく安定上昇帯",
