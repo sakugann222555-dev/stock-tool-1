@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>株式ツール1号</title>
+<style>
+body { font-family: Arial; background:#111; color:#eee; padding:20px; }
+button { padding:10px 15px; font-size:16px; }
+.stock { margin-top:20px; padding:15px; background:#1c1c1c; border-radius:10px; }
+</style>
+</head>
+<body>
+
+<h2>株式ツール1号（慎重型）</h2>
+<button onclick="loadStocks()">更新</button>
+<div id="results"></div>
+
+<script>
+
+const API_KEY = "ここにAPIキー";
+
+async function loadStocks() {
+  const resultDiv = document.getElementById("results");
+  resultDiv.innerHTML = "取得中...";
+
+  // 米国値上がり上位取得
+  const url = `https://www.alphavantage.co/query?function=TOP_GAINERS_LOSERS&apikey=${API_KEY}`;
+  const response = await fetch(url);
+  const data = await response.json();
+
+  if (!data.top_gainers) {
+    resultDiv.innerHTML = "データ取得失敗";
+    return;
+  }
+
+  const gainers = data.top_gainers.slice(0,15);
+
+  let output = "";
+
+  for (let stock of gainers) {
+
+    let changePercent = parseFloat(stock.change_percentage);
+    let price = stock.price;
+    let ticker = stock.ticker;
+
+    // 急騰除外
+    if (changePercent > 25) continue;
+
+    // 簡易スコア計算（慎重型）
+    let score = 0;
+
+    if (changePercent > 3 && changePercent < 15) score += 30;
+    if (parseFloat(stock.volume) > 1000000) score += 20;
+    if (changePercent > 5) score += 20;
+    if (changePercent < 20) score += 10;
+
+    // 勝率変換
+    let winRate = Math.min(50 + (score * 0.4), 85);
+
+    // 65%未満除外
+    if (winRate < 65) continue;
+
+    let analysis = `
+・過熱感が少なく安定上昇帯  
+・出来高を伴った健全な値動き  
+・押し目候補として監視価値あり
+`;
+
+    output += `
+    <div class="stock">
+      <strong>${ticker}</strong><br>
+      価格：${price}<br>
+      上昇率：${changePercent}%<br>
+      スコア：${score}<br>
+      簡易勝率：${winRate.toFixed(1)}%<br>
+      分析：${analysis}
+    </div>
+    `;
+  }
+
+  resultDiv.innerHTML = output || "65%以上の銘柄なし";
+}
+
+</script>
+
+</body>
+</html>
