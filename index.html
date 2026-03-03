@@ -1,121 +1,189 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja">
 <head>
-<meta charset="UTF-8">
-<title>株式ツール1号</title>
-<style>
-body {
-  font-family: Arial;
-  background:#111;
-  color:#eee;
-  margin:0;
-  height:100vh;
-  display:flex;
-  flex-direction:column;
-  justify-content:center;
-  align-items:center;
-  font-size:22px;
-  text-align:center;
-}
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>株式ツール1号（慎重型）</title>
 
-h2 {
-  font-size:28px;
-  margin-bottom:20px;
-}
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #111;
+      color: #eee;
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center; /* 縦中央 */
+      align-items: center;     /* 横中央 */
+      font-size: 22px;
+      text-align: center;
+    }
 
-button { 
-  padding:12px 18px; 
-  font-size:18px; 
-  border-radius:8px;
-}
+    h2 {
+      font-size: 28px;
+      margin: 0 0 20px 0;
+    }
 
-.stock { 
-  margin-top:20px; 
-  padding:18px; 
-  background:#1c1c1c; 
-  border-radius:12px; 
-  font-size:18px;
-  line-height:1.6;
-}
+    button {
+      padding: 12px 18px;
+      font-size: 18px;
+      border-radius: 10px;
+      border: 0;
+      cursor: pointer;
+    }
 
-strong {
-  font-size:20px;
-}
-</style>
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    #results {
+      width: 85%;
+      max-width: 520px;
+      margin-top: 18px;
+    }
+
+    .stock {
+      margin-top: 16px;
+      padding: 18px;
+      background: #1c1c1c;
+      border-radius: 14px;
+      font-size: 20px;
+      line-height: 1.6;
+      text-align: left;
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.05) inset;
+    }
+
+    .stock strong {
+      font-size: 22px;
+      display: inline-block;
+      margin-bottom: 6px;
+    }
+
+    .muted {
+      opacity: 0.85;
+      font-size: 16px;
+      margin-top: 10px;
+    }
+
+    .error {
+      margin-top: 14px;
+      padding: 14px 16px;
+      background: #1c1c1c;
+      border-radius: 14px;
+      width: 85%;
+      max-width: 520px;
+      text-align: left;
+      font-size: 18px;
+      line-height: 1.5;
+    }
+
+    .error small {
+      display: block;
+      margin-top: 8px;
+      opacity: 0.8;
+      font-size: 13px;
+      word-break: break-all;
+    }
+  </style>
 </head>
+
 <body>
+  <h2>株式ツール1号（慎重型）</h2>
+  <button id="refreshBtn" onclick="loadStocks()">更新</button>
+  <div id="results" class="muted">更新を押して取得</div>
 
-<h2>株式ツール1号（慎重型）</h2>
-<button onclick="loadStocks()">更新</button>
-<div id="results"></div>
+  <script>
+    // ★ ここにAPIキーを入れる（Alpha Vantage）
+    const API_KEY = "ここにAPIキー";
 
-<script>
+    async function loadStocks() {
+      const resultDiv = document.getElementById("results");
+      const btn = document.getElementById("refreshBtn");
 
-const API_KEY = "ここにAPIキー";
+      // 連打防止
+      btn.disabled = true;
+      btn.innerText = "取得中...";
+      resultDiv.innerHTML = "<div class='muted'>取得中...</div>";
 
-async function loadStocks() {
-  const resultDiv = document.getElementById("results");
-  resultDiv.innerHTML = "取得中...";
+      try {
+        // 米国 値上がり上位
+        const url = `https://www.alphavantage.co/query?function=TOP_GAINERS_LOSERS&apikey=${API_KEY}`;
+        const response = await fetch(url);
+        const data = await response.json();
 
-  // 米国値上がり上位取得
-  const url = `https://www.alphavantage.co/query?function=TOP_GAINERS_LOSERS&apikey=${API_KEY}`;
-  const response = await fetch(url);
-  const data = await response.json();
+        // 失敗理由表示（データ形式が想定外）
+        if (!data || !data.top_gainers) {
+          resultDiv.innerHTML =
+            `<div class="error">データ取得失敗` +
+            `<small>${escapeHtml(JSON.stringify(data)).slice(0, 600)}</small></div>`;
+          return;
+        }
 
-  if (!data.top_gainers) {
-    resultDiv.innerHTML = "データ取得失敗";
-    return;
-  }
+        const gainers = data.top_gainers.slice(0, 15);
+        let output = "";
 
-  const gainers = data.top_gainers.slice(0,15);
+        for (const stock of gainers) {
+          const changePercent = parseFloat(stock.change_percentage);
+          const price = stock.price;
+          const ticker = stock.ticker;
 
-  let output = "";
+          // 急騰除外
+          if (Number.isFinite(changePercent) && changePercent > 25) continue;
 
-  for (let stock of gainers) {
+          // 簡易スコア（慎重型）
+          let score = 0;
+          if (changePercent > 3 && changePercent < 15) score += 30;
+          if (parseFloat(stock.volume) > 1000000) score += 20;
+          if (changePercent > 5) score += 20;
+          if (changePercent < 20) score += 10;
 
-    let changePercent = parseFloat(stock.change_percentage);
-    let price = stock.price;
-    let ticker = stock.ticker;
+          // 勝率っぽく変換（簡易）
+          const winRate = Math.min(50 + score * 0.4, 85);
 
-    // 急騰除外
-    if (changePercent > 25) continue;
+          // 65%未満は表示しない
+          if (winRate < 65) continue;
 
-    // 簡易スコア計算（慎重型）
-    let score = 0;
+          const analysisLines = [
+            "過熱感が少なく安定上昇帯",
+            "出来高を伴った健全な値動き",
+            "押し目候補として監視価値あり"
+          ];
 
-    if (changePercent > 3 && changePercent < 15) score += 30;
-    if (parseFloat(stock.volume) > 1000000) score += 20;
-    if (changePercent > 5) score += 20;
-    if (changePercent < 20) score += 10;
+          output += `
+            <div class="stock">
+              <strong>${escapeHtml(ticker)}</strong><br>
+              価格：${escapeHtml(String(price))}<br>
+              上昇率：${escapeHtml(String(changePercent))}%<br>
+              スコア：${escapeHtml(String(score))}<br>
+              簡易勝率：${escapeHtml(winRate.toFixed(1))}%<br>
+              分析：<br>・${analysisLines.map(escapeHtml).join("<br>・")}
+            </div>
+          `;
+        }
 
-    // 勝率変換
-    let winRate = Math.min(50 + (score * 0.4), 85);
+        resultDiv.innerHTML = output || "<div class='muted'>65%以上の銘柄なし</div>";
+      } catch (e) {
+        // fetch失敗やCORS系などの例外も表示
+        resultDiv.innerHTML =
+          `<div class="error">データ取得失敗` +
+          `<small>${escapeHtml(String(e))}</small></div>`;
+      } finally {
+        // 成功/失敗どっちでも必ずボタン復帰
+        btn.disabled = false;
+        btn.innerText = "更新";
+      }
+    }
 
-    // 65%未満除外
-    if (winRate < 65) continue;
-
-    let analysis = `
-・過熱感が少なく安定上昇帯  
-・出来高を伴った健全な値動き  
-・押し目候補として監視価値あり
-`;
-
-    output += `
-    <div class="stock">
-      <strong>${ticker}</strong><br>
-      価格：${price}<br>
-      上昇率：${changePercent}%<br>
-      スコア：${score}<br>
-      簡易勝率：${winRate.toFixed(1)}%<br>
-      分析：${analysis}
-    </div>
-    `;
-  }
-
-  resultDiv.innerHTML = output || "65%以上の銘柄なし";
-}
-
-</script>
-
+    function escapeHtml(str) {
+      return str
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+  </script>
 </body>
 </html>
